@@ -179,6 +179,8 @@ class MPState(object):
         self.continue_mode = False
         self.aliases = {}
         self.max_rx_packets = None
+        self.logqueue = None
+        self.logqueue_raw = None
 
     def module(self, name):
         '''Find a public module (most modules are private)'''
@@ -803,6 +805,7 @@ if __name__ == '__main__':
                       default=0, help='MAVLink target master component')
     parser.add_option("--logfile", dest="logfile", help="MAVLink master logfile",
                       default='mav.tlog')
+    parser.add_option("--nolog", action='store_true', help="suppress log file writing")
     parser.add_option("-a", "--append-log", dest="append_log", help="Append to log files",
                       action='store_true', default=False)
     parser.add_option("--quadcopter", dest="quadcopter", help="use quadcopter controls",
@@ -905,7 +908,8 @@ if __name__ == '__main__':
           mpstate.module('link').link_add(serial_list[0].device)
 
     # log all packets from the master, for later replay
-    open_logs()
+    if not opts.nolog:
+        open_logs()
 
     # open any mavlink output ports
     for port in opts.output:
