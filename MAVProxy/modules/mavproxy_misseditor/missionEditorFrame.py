@@ -227,8 +227,9 @@ class MissionEditorFrame(wx.Frame):
             event = self.gui_event_queue.get()
             if event.get_type() == me_event.MEGE_CLEAR_MISS_TABLE:
                 self.grid_mission.ClearGrid()
-                self.grid_mission.DeleteRows(0, 
-                        self.grid_mission.GetNumberRows())
+                if (self.grid_mission.GetNumberRows() > 0):
+                    self.grid_mission.DeleteRows(0, 
+                            self.grid_mission.GetNumberRows())
                 self.grid_mission.SetDefaultColSize(50, True)
                 self.grid_mission.SetColSize(ME_COMMAND_COL, 150)
                 self.grid_mission.SetColSize(ME_LAT_COL, 100)
@@ -393,14 +394,18 @@ class MissionEditorFrame(wx.Frame):
             
         for i in range(0, self.grid_mission.GetNumberRows()):
             cmd_id = me_defines.cmd_reverse_lookup(self.grid_mission.GetCellValue(i,0))
-            p1 = float(self.grid_mission.GetCellValue(i,ME_P1_COL))
-            p2 = float(self.grid_mission.GetCellValue(i,ME_P2_COL))
-            p3 = float(self.grid_mission.GetCellValue(i,ME_P3_COL))
-            p4 = float(self.grid_mission.GetCellValue(i,ME_P4_COL))
-            lat = float(self.grid_mission.GetCellValue(i,ME_LAT_COL))
-            lon = float(self.grid_mission.GetCellValue(i,ME_LON_COL))
-            alt = float(self.grid_mission.GetCellValue(i,ME_ALT_COL))
-            frame = float(me_defines.frame_enum_rev[self.grid_mission.GetCellValue(i,ME_FRAME_COL)])
+            try:
+                p1 = float(self.grid_mission.GetCellValue(i,ME_P1_COL))
+                p2 = float(self.grid_mission.GetCellValue(i,ME_P2_COL))
+                p3 = float(self.grid_mission.GetCellValue(i,ME_P3_COL))
+                p4 = float(self.grid_mission.GetCellValue(i,ME_P4_COL))
+                lat = float(self.grid_mission.GetCellValue(i,ME_LAT_COL))
+                lon = float(self.grid_mission.GetCellValue(i,ME_LON_COL))
+                alt = float(self.grid_mission.GetCellValue(i,ME_ALT_COL))
+                frame = float(me_defines.frame_enum_rev[self.grid_mission.GetCellValue(i,ME_FRAME_COL)])
+            except:
+                #don't lock up the misseditor on missing input!
+                pass #anything missing will just be zero
                 
             self.event_queue.put(MissionEditorEvent(me_event.MEE_WRITE_WP_NUM,
                                                     num=i+1,cmd_id=cmd_id,p1=p1,p2=p2,p3=p3,p4=p4,

@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 '''enable run-time addition and removal of master link, just like --master on the cnd line'''
-''' TO USE: 
+''' TO USE:
     link add 10.11.12.13:14550
     link list
     link remove 3      # to remove 3rd output
-'''    
+'''
 
 from pymavlink import mavutil
 import time, struct, math, sys, fnmatch, traceback
@@ -48,12 +48,16 @@ class LinkModule(mp_module.MPModule):
 
     def idle_task(self):
         '''called on idle'''
-        if not self.menu_added_console and self.module('console') is not None:
+        if mp_util.has_wxpython and (not self.menu_added_console and self.module('console') is not None):
             self.menu_added_console = True
             # we don't dynamically update these yet due to a wx bug
             self.menu_add.items = [ MPMenuItem(p, p, '# link add %s' % p) for p in self.complete_serial_ports('') ]
             self.menu_rm.items = [ MPMenuItem(p, p, '# link remove %s' % p) for p in self.complete_links('') ]
             self.module('console').add_menu(self.menu)
+        for m in self.mpstate.mav_master:
+            m.source_system = self.settings.source_system
+            m.mav.srcSystem = m.source_system
+            m.mav.srcComponent = self.settings.source_component
 
     def complete_serial_ports(self, text):
         '''return list of serial ports'''
@@ -107,7 +111,10 @@ class LinkModule(mp_module.MPModule):
     def link_add(self, device, use_native=False):
         '''add new link'''
         try:
-            conn = mavutil.mavlink_connection(device, autoreconnect=True, baud=self.settings.baudrate, use_native=use_native)
+            conn = mavutil.mavlink_connection(device, autoreconnect=True, baud=self.settings.baudrate, use_native=use_native,
+                                              source_system=self.settings.source_system)
+
+            conn.mav.srcComponent = self.settings.source_component
         except Exception as msg:
             print("Failed to connect to %s : %s" % (device, msg))
             return False
@@ -295,11 +302,9 @@ class LinkModule(mp_module.MPModule):
     def __update_state(self, mtype, m, master):
         """Update our model state based on the received message"""
         if mtype == 'HEARTBEAT' and m.get_srcSystem() != 255:
-            if (self.status.target_system != m.get_srcSystem() or
-                self.status.target_component != m.get_srcComponent()):
-                self.status.target_system = m.get_srcSystem()
-                self.status.target_component = m.get_srcComponent()
-                self.say("online system %u component %u" % (self.status.target_system, self.status.target_component),'message')
+            if self.settings.target_system == -1 and self.settings.target_system != m.get_srcSystem():
+                self.settings.target_system = m.get_srcSystem()
+                self.say("online system %u" % self.settings.target_system,'message')
 
             if self.status.heartbeat_error:
                 self.status.heartbeat_error = False
@@ -344,7 +349,7 @@ class LinkModule(mp_module.MPModule):
             elif mtype in [mavutil.mavlink.MAV_TYPE_ANTENNA_TRACKER]:
                 self.mpstate.vehicle_type = 'antenna'
                 self.mpstate.vehicle_name = 'AntennaTracker'
-        
+
         elif mtype == 'STATUSTEXT':
             if m.text != self.status.last_apm_msg or time.time() > self.status.last_apm_msg_time+2:
                 self.mpstate.console.writeln("APM: %s" % m.text, bg='red')
@@ -389,7 +394,7 @@ class LinkModule(mp_module.MPModule):
                 if rounded_dist != 0:
                     self.say("%u" % rounded_dist, priority="progress")
             self.status.last_distance_announce = rounded_dist
-    
+
         elif mtype == "GLOBAL_POSITION_INT":
             self.report_altitude(m.relative_alt*0.001)
 

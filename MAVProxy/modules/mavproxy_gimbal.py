@@ -100,8 +100,7 @@ class GimbalModule(mp_module.MPModule):
                                             mavutil.mavlink.MAV_COMP_ID_GIMBAL,
                                             radians(roll),
                                             radians(pitch),
-                                            radians(yaw),
-                                            0, 0, 0)
+                                            radians(yaw))
 
     def cmd_gimbal_point(self, args):
         '''control gimbal pointing'''
@@ -148,7 +147,7 @@ class GimbalModule(mp_module.MPModule):
         vehicle_dcm.from_euler(att.roll, att.pitch, att.yaw)
 
         rotmat_copter_gimbal = Matrix3()
-        rotmat_copter_gimbal.from_euler312(m.joint_roll, m.joint_pitch, m.joint_yaw)
+        rotmat_copter_gimbal.from_euler312(m.joint_roll, m.joint_el, m.joint_az)
         gimbal_dcm = vehicle_dcm * rotmat_copter_gimbal
         
         lat = gpi.lat * 1.0e-7

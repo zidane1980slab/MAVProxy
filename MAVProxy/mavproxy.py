@@ -43,8 +43,6 @@ class MPStatus(object):
         self.counters = {'MasterIn' : [], 'MasterOut' : 0, 'FGearIn' : 0, 'FGearOut' : 0, 'Slave' : 0}
         self.setup_mode = opts.setup
         self.mav_error = 0
-        self.target_system = 1
-        self.target_component = 1
         self.altitude = 0
         self.last_altitude_announce = 0.0
         self.last_distance_announce = 0.0
@@ -146,7 +144,12 @@ class MPState(object):
               MPSetting('rallyalt', int, 90, 'Default Rally Altitude', range=(0,10000), increment=1),
               MPSetting('terrainalt', str, 'Auto', 'Use terrain altitudes', choice=['Auto','True','False']),
               MPSetting('rally_breakalt', int, 40, 'Default Rally Break Altitude', range=(0,10000), increment=1),
-              MPSetting('rally_flags', int, 0, 'Default Rally Flags', range=(0,10000), increment=1)
+              MPSetting('rally_flags', int, 0, 'Default Rally Flags', range=(0,10000), increment=1),
+
+              MPSetting('source_system', int, 255, 'MAVLink Source system', range=(0,255), increment=1, tab='MAVLink'),
+              MPSetting('source_component', int, 0, 'MAVLink Source component', range=(0,255), increment=1),
+              MPSetting('target_system', int, -1, 'MAVLink target system', range=(-1,255), increment=1),
+              MPSetting('target_component', int, 0, 'MAVLink target component', range=(0,255), increment=1)
             ])
 
         self.completions = {
@@ -282,7 +285,7 @@ def load_module(modname, quiet=False):
             if mpstate.settings.moddebug > 1:
                 import traceback
                 print(traceback.format_exc())
-    print("Failed to load module: %s" % ex)
+    print("Failed to load module: %s. Use 'set moddebug 3' in the MAVProxy console to enable traceback" % ex)
     return False
 
 def unload_module(modname):
@@ -635,7 +638,7 @@ def set_stream_rates():
         else:
             rate = mpstate.settings.streamrate2
         if rate != -1:
-            master.mav.request_data_stream_send(mpstate.status.target_system, mpstate.status.target_component,
+            master.mav.request_data_stream_send(mpstate.settings.target_system, mpstate.settings.target_component,
                                                 mavutil.mavlink.MAV_DATA_STREAM_ALL,
                                                 rate, 1)
 
@@ -709,6 +712,8 @@ def main_loop():
             line = mpstate.input_queue.get()
             mpstate.input_count += 1
             cmds = line.split(';')
+            if len(cmds) == 1 and cmds[0] == "":
+                  mpstate.empty_input_count += 1                 
             for c in cmds:
                 process_stdin(c)
 
@@ -818,10 +823,12 @@ if __name__ == '__main__':
                       help="MAVLink stream rate")
     parser.add_option("--source-system", dest='SOURCE_SYSTEM', type='int',
                       default=255, help='MAVLink source system for this GCS')
+    parser.add_option("--source-component", dest='SOURCE_COMPONENT', type='int',
+                      default=0, help='MAVLink source component for this GCS')
     parser.add_option("--target-system", dest='TARGET_SYSTEM', type='int',
-                      default=1, help='MAVLink target master system')
+                      default=-1, help='MAVLink target master system')
     parser.add_option("--target-component", dest='TARGET_COMPONENT', type='int',
-                      default=1, help='MAVLink target master component')
+                      default=0, help='MAVLink target master component')
     parser.add_option("--logfile", dest="logfile", help="MAVLink master logfile",
                       default='mav.tlog')
     parser.add_option("--nolog", action='store_true', help="suppress log file writing")
@@ -886,8 +893,8 @@ if __name__ == '__main__':
               print("%s" % port)
 
     # container for status information
-    mpstate.status.target_system = opts.TARGET_SYSTEM
-    mpstate.status.target_component = opts.TARGET_COMPONENT
+    mpstate.settings.target_system = opts.TARGET_SYSTEM
+    mpstate.settings.target_component = opts.TARGET_COMPONENT
 
     mpstate.mav_master = []
 
@@ -914,6 +921,9 @@ if __name__ == '__main__':
         signal.signal(sig, quit_handler)
 
     load_module('link', quiet=True)
+
+    mpstate.settings.source_system = opts.SOURCE_SYSTEM
+    mpstate.settings.source_component = opts.SOURCE_COMPONENT
 
     # open master link
     for mdev in opts.master:
@@ -944,6 +954,7 @@ if __name__ == '__main__':
 
     mpstate.input_queue = Queue.Queue()
     mpstate.input_count = 0
+    mpstate.empty_input_count = 0
     if opts.setup:
         mpstate.rl.set_prompt("")
 
